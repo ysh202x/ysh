@@ -2,12 +2,48 @@
 #include "logger.h"
 
 
+
 #define INSTANCE_IMP(class_name, ...) \
 class_name &class_name::Instance() { \
     static std::shared_ptr<class_name> s_instance(new class_name(__VA_ARGS__)); \
     static class_name &s_instance_ref = *s_instance; \
     return s_instance_ref; \
 }
+
+LogContext::LogContext(LogLevel level,const char *file,const char *function,int line,
+                              const char *module_name,const char *flag)
+{
+    _level = level;
+    _file = file;
+    _function = function;
+    _line = line;
+    _module_name = module_name;
+    _flag = flag;
+    gettimeofday(&_tv, nullptr);
+    //_time = print_time(_tv);
+}
+
+const std::string & LogContext::str()
+{
+    if(_content.empty())
+    {
+        _content = " " + _module_name + " " + _flag + " " + _file + " " + _function + " " + std::to_string(_line) + " " + _flag + " ";
+    }
+
+    return _content;
+}
+
+AsyncLogWriter::AsyncLogWriter()
+{
+    std::cout << "AsyncLogWriter" << std::endl;
+    _thread = std::thread(&AsyncLogWriter::run,this);
+}
+
+AsyncLogWriter::~AsyncLogWriter()
+{
+
+}
+
 
 INSTANCE_IMP(Logger,"ysh_logger");
 
@@ -51,4 +87,4 @@ std::string log_channel::print_time(const timeval & tv)
     
 }
 
-void 
+
