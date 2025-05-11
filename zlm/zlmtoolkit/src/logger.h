@@ -2,6 +2,7 @@
 #define __UTIL_LOGGER_H__
 
 #include <iostream>
+#include <thread>
 
 namespace ysh_toolkit{
 
@@ -37,7 +38,7 @@ public:
 
 private:
     std::string _content;
-}
+};
 
 class LogWriter
 {
@@ -55,26 +56,25 @@ public:
     ~AsyncLogWriter();
 
 private:
-    void write(const LogContext &log_context,const std::string &message) override;
+    //void write(const LogContext &log_context,const std::string &message) override;
     void run();
 
 private:
     std::thread _thread;
-
-    
-}
+    bool _exit_flag;
+};
 
 class LogChannel
 {
 public:
-    log_channel(const std::string &channel_name,LogLevel level = LInfo);
-    virtual ~log_channel();
+    LogChannel(const std::string &channel_name,LogLevel level = LInfo);
+    virtual ~LogChannel();
 
 //保护继承 可以在派生类使用    
 protected:
     std::string _channel_name;
     LogLevel _level;
-}
+};
 
 
 
@@ -91,10 +91,18 @@ public:
 
 private:
     std::string _logger_name;
+};
+
+class LoggerWrapper{
+public:
+    static void printLogV(int level, const char *file, const char *function, 
+                            int line, const char *fmt, va_list ap);
+    static void printLog(int level,const char *file,
+                         const char *function,int line,const char  *fmt,...);
+};
+
+
+#define PrintLog(level, ...) ::ysh_toolkit::LoggerWrapper::printLog( level, __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+
 }
-
-
-
-#define  PrintLog(level,...) 
-
 #endif

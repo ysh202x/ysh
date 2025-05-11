@@ -1,6 +1,7 @@
 # 工程名称
 project (ysh_c++)
 
+cmake_minimum_required(VERSION 3.22)
 
 #使能c++11
 #Enable c++11
@@ -14,7 +15,7 @@ include_directories(
 )
 
 set(LOG_SRC_LIST
-    ./src/logger.cc)
+    ./src/logger.cpp)
 
 add_library(LOGGER_STATIC_LIB STATIC ${LOG_SRC_LIST})
 
