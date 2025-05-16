@@ -1,3 +1,5 @@
+```
+
 @startuml
 namespace toolkit {
     class Logger {
@@ -107,6 +109,8 @@ namespace toolkit {
     FileChannel --> FileChannelBase
 }
 @enduml
+```
+```
 下面是一个基于 ZLToolKit 中 logger.h 的结构图，描述了日志模块中各个类及其继承、组合关系：
 ─────────────────────────────────────────────────────────────────────────────
 【Logger 模块结构图】
@@ -192,7 +196,7 @@ Logger 模块主要由 Logger、LogContext、LogContextCapture、LogWriter 和 L
 – LogChannel 是日志通道的抽象基类，ConsoleChannel、FileChannel、SysLogChannel、EventChannel 是其子类，负责将日志输出到不同目标。
 ─────────────────────────────────────────────────────────────────────────────
 （结构图结束）
-
+```
 # 1. 明确学习目标
     学习 C++ 的基础语法（类、继承、模板、智能指针等）。
     理解日志系统的设计思想（如日志上下文、日志通道、日志级别）。
