@@ -107,6 +107,91 @@ namespace toolkit {
     FileChannel --> FileChannelBase
 }
 @enduml
+下面是一个基于 ZLToolKit 中 logger.h 的结构图，描述了日志模块中各个类及其继承、组合关系：
+─────────────────────────────────────────────────────────────────────────────
+【Logger 模块结构图】
+─────────────────────────────────────────────────────────────────────────────
+【Logger】
+│
+│ Logger 是日志模块的主体，它继承自 std::enable_shared_from_this<Logger> 和 noncopyable，
+│ 内部持有：
+│ – last_log（LogContextPtr，记录上一条日志，用于去重）
+│ – logger_name（std::string，日志器名称）
+│ – writer（std::shared_ptr<LogWriter>，自定义日志写入器，可选）
+│ – default_channel（std::shared_ptr<LogChannel>，默认日志通道，例如 ConsoleChannel）
+│ – channels（std::map<std::string, std::shared_ptr<LogChannel>>，管理多个日志通道）
+│
+│ Logger 提供以下主要接口：
+│ – static Logger &Instance()：获取单例
+│ – void add(const std::shared_ptr<LogChannel> &channel)：添加日志通道
+│ – void del(const std::string &name)：删除日志通道
+│ – std::shared_ptr<LogChannel> get(const std::string &name)：获取日志通道
+│ – void setWriter(const std::shared_ptr<LogWriter> &writer)：设置日志写入器
+│ – void setLevel(LogLevel level)：设置所有日志通道的日志级别
+│ – void write(const LogContextPtr &ctx)：写日志（内部调用 writer->write 或 writeChannels）
+│ – void writeChannels(const LogContextPtr &ctx)：分发日志到各通道（内部调用 writeChannels_l）
+│ – void writeChannels_l(const LogContextPtr &ctx)：遍历 channels 或调用 _default_channel 输出日志
+│
+─────────────────────────────────────────────────────────────────────────────
+【LogContext】
+│
+│ LogContext 是日志上下文，继承自 std::ostringstream，用于存储日志的详细信息：
+│ – level（LogLevel，日志级别）
+│ – line（int，日志行号）
+│ – repeat（int，日志重复计数，用于去重）
+│ – file（std::string，日志文件）
+│ – function（std::string，日志函数名）
+│ – thread_name（std::string，线程名）
+│ – module_name（std::string，模块名）
+│ – flag（std::string，日志标记）
+│ – tv（struct timeval，日志时间）
+│ – content（std::string，日志内容，由 str() 方法生成）
+│
+─────────────────────────────────────────────────────────────────────────────
+【LogContextCapture】
+│
+│ LogContextCapture 是日志上下文捕获器，用于捕获日志上下文（LogContext），
+│ 内部持有：
+│ – ctx（LogContextPtr，日志上下文）
+│ – logger（Logger &，日志器引用）
+│
+│ 在构造时，会构造一个 LogContext 对象，并调用 Logger::write(ctx) 将日志传入 Logger。
+│
+─────────────────────────────────────────────────────────────────────────────
+【LogWriter】
+│
+│ LogWriter 是日志写入器的抽象基类，继承自 noncopyable，提供纯虚函数：
+│ – virtual void write(const LogContextPtr &ctx, Logger &logger) = 0
+│
+│ AsyncLogWriter 是 LogWriter 的一个子类，内部持有一个线程，异步地将日志写入 Logger。
+│
+─────────────────────────────────────────────────────────────────────────────
+【LogChannel】
+│
+│ LogChannel 是日志通道的抽象基类，继承自 noncopyable，提供纯虚函数：
+│ – virtual void write(const Logger &logger, const LogContextPtr &ctx) = 0
+│
+│ 内部持有：
+│ – name（std::string，通道名称）
+│ – level（LogLevel，日志级别）
+│
+│ 子类包括：
+│ – ConsoleChannel：输出日志到控制台
+│ – FileChannel：输出日志到文件（内部调用 FileChannelBase，支持文件轮转、大小限制等）
+│ – SysLogChannel：输出日志到系统日志（例如 Linux syslog）
+│ – EventChannel：输出日志到广播（通过 NoticeCenter 分发）
+│
+─────────────────────────────────────────────────────────────────────────────
+【总结】
+─────────────────────────────────────────────────────────────────────────────
+Logger 模块主要由 Logger、LogContext、LogContextCapture、LogWriter 和 LogChannel 组成。
+– Logger 是日志主体，管理日志通道和日志写入器，负责分发日志。
+– LogContext 存储日志的详细信息（级别、文件、函数、行号、时间、内容等）。
+– LogContextCapture 捕获日志上下文，并调用 Logger::write 将日志传入 Logger。
+– LogWriter 是日志写入器的抽象基类，AsyncLogWriter 是其异步实现。
+– LogChannel 是日志通道的抽象基类，ConsoleChannel、FileChannel、SysLogChannel、EventChannel 是其子类，负责将日志输出到不同目标。
+─────────────────────────────────────────────────────────────────────────────
+（结构图结束）
 
 # 1. 明确学习目标
     学习 C++ 的基础语法（类、继承、模板、智能指针等）。
