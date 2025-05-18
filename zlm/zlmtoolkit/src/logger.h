@@ -6,17 +6,46 @@
 
 namespace ysh_toolkit{
 
-typedef enum
+using LogContextPtr = std::shared_ptr<LogContext>;
+
+typedef enum{LTrace,LDebug,LInfo,LWarn,LError}LogLevel;
+
+class noncopyable
 {
-    LTrace,
-    LDebug,
-    LInfo,
-    LWarn,
-    LError,
-}LogLevel;
+public :
+    noncopyable() = default;
+    ~noncopyable() = default;
+
+public:
+
+    //禁止拷贝赋值函数
+    noncopyable(const noncopyable &) = delete;
+    //禁止移动构造函数
+    noncopyable(noncopyable &&) = delete;
+    //禁止移动赋值函数
+    noncopyable & operator=(noncopyable &&) = delete;
+    //禁止拷贝构造函数
+    noncopyable & operator=(const noncopyable &) = delete;
+};
+
+class Logger::public noncopyable
+{
+public:
+    /*
+        日志单例
+    */
+    static Logger& Instance();
+
+    explicit Logger(const std::string &loggername);
+    ~Logger();
+
+private:
+    std::string _logger_name;
+};
 
 
-class LogContext
+
+class LogContext :: public std::ostream
 {
 public:
     LogContext() = default;
@@ -38,6 +67,33 @@ public:
 
 private:
     std::string _content;
+};
+
+class LogContextCapture
+{
+public:
+    using Ptr = std::shared_ptr<LogContextCapture>;
+    LogContextCapture(Logger &logger, LogLevel level, const char *file, const char *function, int line, const char *flag = "");
+    ~LogContextCapture();
+
+
+    LogContextCapture &operator <<(std::ostream & (*f)(std::ostream &));
+
+    template<typename T>
+    LogContextCapture &operator << (T && data)
+    {
+        if(!_pLogContext)
+        {
+            return *this;
+        }
+        (*_pLogContext) << std::forward<T>(data);
+        return *this;
+    }
+
+private:
+    LogContextPtr _pLogContext;
+    Logger & _logger;
+
 };
 
 class LogWriter
@@ -77,22 +133,6 @@ protected:
 };
 
 
-
-class Logger
-{
-public:
-    /*
-        日志单例
-    */
-    static Logger& Instance();
-
-    explicit Logger(const std::string &loggername);
-    ~Logger();
-
-private:
-    std::string _logger_name;
-};
-
 class LoggerWrapper{
 public:
     static void printLogV(int level, const char *file, const char *function, 
@@ -100,6 +140,8 @@ public:
     static void printLog(int level,const char *file,
                          const char *function,int line,const char  *fmt,...);
 };
+
+
 
 
 #define PrintLog(level, ...) ::ysh_toolkit::LoggerWrapper::printLog( level, __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)

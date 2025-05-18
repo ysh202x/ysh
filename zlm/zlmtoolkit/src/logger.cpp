@@ -37,6 +37,26 @@ const std::string & LogContext::str()
     return _content;
 }
 
+LogContextCapture::LogContextCapture(Logger &logger, LogLevel level, const char *file, const char *function, int line, const char *flag = "");
+{
+    _pLogContext = new LogContext(level, file, function, line, " ", flag);
+    _logger = logger;
+}
+
+LogContextCapture::~LogContextCapture()
+{
+    *this << endl;
+}
+
+LogContextCapture& LogContextCapture::operator<<(const std::string &str)
+{
+    if(!_pLogContext)
+    {
+        return *this;
+    }
+    return *this;
+}
+
 void AsyncLogWriter::run()
 {
     pthread_setname_np(pthread_self(), "async log");
