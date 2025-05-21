@@ -3,12 +3,19 @@
 
 #include <iostream>
 #include <thread>
+#include <sstream>
+#include <memory>
 
 namespace ysh_toolkit{
+
+class LogContext;
+class Logger;
 
 using LogContextPtr = std::shared_ptr<LogContext>;
 
 typedef enum{LTrace,LDebug,LInfo,LWarn,LError}LogLevel;
+
+Logger &getLogger();
 
 class noncopyable
 {
@@ -28,7 +35,7 @@ public:
     noncopyable & operator=(const noncopyable &) = delete;
 };
 
-class Logger::public noncopyable
+class Logger:public noncopyable
 {
 public:
     /*
@@ -39,13 +46,16 @@ public:
     explicit Logger(const std::string &loggername);
     ~Logger();
 
+    /*写日志*/
+    void write(const LogContextPtr &log_context);
+
 private:
     std::string _logger_name;
 };
 
 
 
-class LogContext :: public std::ostream
+class LogContext : public std::ostringstream
 {
 public:
     LogContext() = default;
@@ -67,6 +77,7 @@ public:
 
 private:
     std::string _content;
+    bool _b_got_content = false;
 };
 
 class LogContextCapture
@@ -135,16 +146,23 @@ protected:
 
 class LoggerWrapper{
 public:
-    static void printLogV(int level, const char *file, const char *function, 
+    static void printLogV(Logger &logger,LogLevel level, const char *file, const char *function, 
                             int line, const char *fmt, va_list ap);
-    static void printLog(int level,const char *file,
+    static void printLog(Logger &logger,LogLevel level,const char *file,
                          const char *function,int line,const char  *fmt,...);
 };
 
 
 
+//用法: DebugL << 1 << "+" << 2 << '=' << 3;  [AUTO-TRANSLATED:e6efe6cb]
+//Usage: DebugL << 1 << "+" << 2 << '=' << 3;
 
-#define PrintLog(level, ...) ::ysh_toolkit::LoggerWrapper::printLog( level, __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define WriteL(level) ::ysh_toolkit::LogContextCapture(::ysh_toolkit::getLogger(), level, __FILE__, __FUNCTION__, __LINE__, "test_flag")
+#define DebugL WriteL(::ysh_toolkit::LDebug)
+
+
+#define PrintLog(level, ...) ::ysh_toolkit::LoggerWrapper::printLog(::ysh_toolkit::getLogger(), level, __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define PrintLogD(...) PrintLog(::ysh_toolkit::LDebug, ##__VA_ARGS__)
 
 }
 #endif

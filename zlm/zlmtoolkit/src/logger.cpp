@@ -5,7 +5,12 @@
 #include "logger.h"
 
 //使用名称空间
-using namespace ysh_toolkit;
+using namespace std;
+
+namespace ysh_toolkit
+{
+
+Logger *g_defaultLogger = nullptr;
 
 #define INSTANCE_IMP(class_name, ...) \
 class_name &class_name::Instance() { \
@@ -29,18 +34,19 @@ LogContext::LogContext(LogLevel level,const char *file,const char *function,int 
 
 const std::string & LogContext::str()
 {
-    if(_content.empty())
+    if(!_b_got_content)
     {
-        _content = " " + _module_name + " " + _flag + " " + _file + " " + _function + " " + std::to_string(_line) + " " + _flag + " ";
+        _content = ostringstream::str();
+        _b_got_content = true;
     }
 
     return _content;
 }
 
-LogContextCapture::LogContextCapture(Logger &logger, LogLevel level, const char *file, const char *function, int line, const char *flag = "");
+
+LogContextCapture::LogContextCapture(Logger &logger, LogLevel level, const char *file, const char *function, int line, const char *flag):_logger(logger)
 {
-    _pLogContext = new LogContext(level, file, function, line, " ", flag);
-    _logger = logger;
+    _pLogContext = std::make_shared<LogContext>(level, file, function, line, " ", flag);
 }
 
 LogContextCapture::~LogContextCapture()
@@ -48,12 +54,16 @@ LogContextCapture::~LogContextCapture()
     *this << endl;
 }
 
-LogContextCapture& LogContextCapture::operator<<(const std::string &str)
+//std::endl
+LogContextCapture& LogContextCapture::operator<<(std::ostream& (*f)(std::ostream&))
 {
     if(!_pLogContext)
     {
         return *this;
     }
+
+    _logger.write(_pLogContext);
+    _pLogContext.reset();
     return *this;
 }
 
@@ -92,6 +102,25 @@ Logger::Logger(const std::string &loggername)
 Logger::~Logger()
 {
     std::cout << "Logger destructor" << std::endl;
+}
+
+
+Logger &getLogger()
+{
+    if(!g_defaultLogger)
+    {
+        g_defaultLogger = &Logger::Instance();
+    }
+    return *g_defaultLogger;
+}
+
+void Logger::write(const LogContextPtr &log_context)
+{
+    if(log_context)
+    {
+        std::cout << log_context->_function << ":" << log_context->_line << " " << log_context->str() << std::endl; 
+        
+    }
 }
 
 
@@ -148,23 +177,26 @@ static int vasprintf(char **strp, const char *fmt, va_list ap) {
 }
 #endif
 
-void LoggerWrapper::printLogV(int level, const char *file, const char *function, 
+void LoggerWrapper::printLogV(Logger &logger,LogLevel level, const char *file, const char *function, 
                             int line, const char *fmt, va_list ap)
 {
+    LogContextCapture info(logger, level, file, function, line, " ");
     char *str = nullptr;
-    if(vasprintf(&str, fmt, ap) >= 0 && str)
+    if(vasprintf(&str,fmt,ap) >= 0 && str)
     {
+        info << str;
         free(str);
     }
+        
 }
 
-void LoggerWrapper::printLog(int level,const char *file,
+void LoggerWrapper::printLog(Logger &logger,LogLevel level,const char *file,
                          const char *function,int line,const char  *fmt,...)
 {
     va_list ap;
     va_start(ap,fmt);
-    printLogV(level, file, function, line, fmt, ap);
+    printLogV(logger,level, file, function, line, fmt, ap);
     va_end(ap);
 }
-
+}
 

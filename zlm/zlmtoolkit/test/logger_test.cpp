@@ -6,6 +6,7 @@ using namespace ysh_toolkit;
 
 int main()
 {
-    std::cout << "main" << std::endl;
-    PrintLog(0,"%s\n","hello");
+    //std::cout << "main" << std::endl;
+    PrintLogD("%s\n","hello");
+    DebugL << 1 << "+" << 2 << '=' << 3;
 }
