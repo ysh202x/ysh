@@ -5,11 +5,13 @@
 #include <thread>
 #include <sstream>
 #include <memory>
+#include <map>
 
 namespace ysh_toolkit{
 
 class LogContext;
 class Logger;
+class LogChannel;
 
 using LogContextPtr = std::shared_ptr<LogContext>;
 
@@ -46,38 +48,15 @@ public:
     explicit Logger(const std::string &loggername);
     ~Logger();
 
-
     /*添加日志通道*/
-    void add(const std::shared_ptr<LogChannel> &channel) { _channels[channel->name()] = channel; }
+    void add(const std::shared_ptr<LogChannel> &channel);
     /*删除日志通道*/
-    void del(const std::string &name) { _channels.erase(name); }
+    void del(const std::string &name) { _channels.erase(name); };
 
-    std::shared_ptr<LogChannel> get(const std::string &name)
-    {
-        auto it = _channels.find(name)
-        if(it != _channels.end)
-        {
-            return it->second;
-        }
-        return nullptr;
-    }
+    std::shared_ptr<LogChannel> get(const std::string &name);
 
     /*写日志*/
-    void write(const LogContextPtr &log_context)
-    {
-        //whitechannel
-        if(_channels.empty())
-        {
-            return;
-        }
-        for(auto &it : channels)
-        {
-            if(it->second)
-            {
-                it->second->write(log_context);
-            }
-        }
-    }
+    void write(const LogContextPtr &log_context);
     
 private:
     std::string _logger_name;
@@ -167,9 +146,12 @@ class LogChannel : public noncopyable
 public:
     LogChannel(const std::string &name, LogLevel level) : _name(name), _level(level) {}
     virtual ~LogChannel() = default;
-    virtual void write(const LogContextPtr &ctx) = 0;
+    virtual void write(const Logger &logger,const LogContextPtr &ctx) = 0;
     const std::string &name() const { return _name; }
     void setLevel(LogLevel level) { _level = level; }
+
+protected:
+    virtual void format(const Logger & logger,std::ostream &ost, const LogContextPtr &ctx, bool enable_color = true, bool enable_detail = true);
 
 protected:
     std::string _name;
@@ -181,10 +163,7 @@ class ConsoleChannel : public LogChannel
 {
 public:
     ConsoleChannel(const std::string &name, LogLevel level) : LogChannel(name, level) {}
-    void write(const LogContextPtr &ctx) override 
-    {
-        std::cout << ctx->str() << std::endl;
-    } 
+    void write(const Logger &logger,const LogContextPtr &ctx) override ;
 };
 
 class LoggerWrapper{

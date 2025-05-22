@@ -114,27 +114,43 @@ Logger &getLogger()
     return *g_defaultLogger;
 }
 
-void Logger::write(const LogContextPtr &log_context)
+void Logger::add(const std::shared_ptr<LogChannel> &channel)
 {
-    if(log_context)
+    _channels[channel->name()] = channel;
+}
+
+std::shared_ptr<LogChannel> Logger::get(const std::string &name)
+{
+    auto it = _channels.find(name);
+    if(it != _channels.end())
     {
-        std::cout << log_context->_function << ":" << log_context->_line << " " << log_context->str() << std::endl; 
-        
+        return it->second;
+    }
+    return nullptr;
+}
+
+void Logger::write(const LogContextPtr &ctx)
+{
+    {
+        //whitechannel
+        if(_channels.empty())
+        {
+            return;
+        }
+        for(auto &it : _channels)
+        {
+            if(it.second)
+            {
+                it.second->write(*this,ctx);
+            }
+        }
     }
 }
 
 
-/*-----------------log_channel------------------- */
-LogChannel::LogChannel(const std::string &channel_name,LogLevel level)
-{
-    _channel_name = channel_name;
-    _level = level;
-}
 
-LogChannel::~LogChannel()
-{
-    std::cout << "log_channel destructor" << std::endl;
-}
+/*-----------------log_channel------------------- */
+
 #if 0
 std::string LogChannel::print_time(const timeval & tv)
 {
@@ -198,5 +214,49 @@ void LoggerWrapper::printLog(Logger &logger,LogLevel level,const char *file,
     printLogV(logger,level, file, function, line, fmt, ap);
     va_end(ap);
 }
+
+void LogChannel::format(const Logger & logger,std::ostream &ost, const LogContextPtr &ctx, bool enable_color, bool enable_detail)
+{
+    #define CLEAR_COLOR "\033[0m"
+static const char *LOG_CONST_TABLE[][3] = {
+        {"\033[44;37m", "\033[34m", "T"},
+        {"\033[42;37m", "\033[32m", "D"},
+        {"\033[46;37m", "\033[36m", "I"},
+        {"\033[43;37m", "\033[33m", "W"},
+        {"\033[41;37m", "\033[31m", "E"}};
+    if(!enable_detail && ctx->str().empty())
+    {
+        return;
+    }
+    if(enable_color)
+    {
+        ost << LOG_CONST_TABLE[ctx->_level][1];
+    }
+
+    if(enable_detail)
+    {
+        // tag or process name
+        //ost << "[" << (!ctx->_flag.empty() ? ctx->_flag : logger.getName()) << "] ";
+        // pid and thread_name
+        //ost << "[" << printf_pid() << "-" << ctx->_thread_name << "] ";
+        // source file location
+        ost << ctx->_file << ":" << ctx->_line << " " << ctx->_function << " | ";
+    }
+
+     // log content
+    ost << ctx->str();
+    ost << CLEAR_COLOR;
+    ost << endl;
+}
+
+void ConsoleChannel::write(const Logger &logger,const LogContextPtr &ctx)
+{
+    if(_level > ctx->_level)
+    {
+        return;
+    }
+    format(logger, std::cout, ctx, true, true);
+}
+
 }
 
