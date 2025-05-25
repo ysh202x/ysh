@@ -6,6 +6,7 @@
 #include <sstream>
 #include <memory>
 #include <map>
+#include "util.h"
 
 namespace ysh_toolkit{
 
@@ -116,29 +117,6 @@ private:
 
 };
 
-class LogWriter
-{
-public:
-    LogWriter() = default;
-    virtual ~LogWriter() = default;
-    virtual void write(const LogContext &log_context,const std::string &message) = 0;   
-    
-};
-
-class AsyncLogWriter:public LogWriter
-{
-public:
-    AsyncLogWriter();
-    ~AsyncLogWriter();
-
-private:
-    //void write(const LogContext &log_context,const std::string &message) override;
-    void run();
-
-private:
-    std::thread _thread;
-    bool _exit_flag;
-};
 
 // 日志通道抽象基类，负责将日志输出到不同目标（如控制台、文件、系统日志等）
 class LogChannel : public noncopyable
@@ -166,12 +144,94 @@ public:
     void write(const Logger &logger,const LogContextPtr &ctx) override ;
 };
 
+class FileChannelBase : public LogChannel
+{
+public:
+    FileChannelBase(const std::string &name = "FileChannelBase",const std::string &path = exe_path() + ".log",LogLevel level = LTrace);
+    ~FileChannelBase() override;
+
+    void write(const Logger &logger,const LogContextPtr &ctx) override ;
+    bool setPath(const std::string &path);
+    const std::string &path() const;
+
+protected:
+    virtual bool open();
+    virtual void close();
+    virtual size_t size();
+
+protected:
+    std::string _path;
+    std::ofstream _fstream;
+};
+
+class FileChannel : public ConsoleChannel
+{
+public:
+    FileChannel(const std::string &name = "FileChannel",const std::string &dir = exe_dir() + + "log/",LogLevel level = LTrace);
+    ~FileChannel() override = default;
+
+    void wirte(const Logger &logger,const LogContextPtr &ctx) override ;
+
+    void setMaxDay(size_t max_day);
+
+    void setFileMaxSize(size_t max_size);
+
+    void setFileMaxCount(size_t max_count);
+private:
+
+    //删除日志切片
+    void clean();
+
+    void checkSize(time_t sec);
+
+    void changeFile(time_t sec);
+
+private:
+    bool _can_write = false;
+
+    size_t _log_max_day = 7;
+    size_t _log_max_size = 1024 * 1024 * 10; //10M
+    size_t _log_max_count = 10;
+
+    size_t _index = 0;
+    int64_t _last_day = -1;
+    time_t _last_check_time = 0;
+    std:string _dir;
+    std::set<std::string> _log_file_map;
+}
+
+
 class LoggerWrapper{
 public:
     static void printLogV(Logger &logger,LogLevel level, const char *file, const char *function, 
                             int line, const char *fmt, va_list ap);
     static void printLog(Logger &logger,LogLevel level,const char *file,
                          const char *function,int line,const char  *fmt,...);
+};
+
+
+class LogWriter
+{
+public:
+    LogWriter() = default;
+    virtual ~LogWriter() = default;
+    virtual void write(const LogContext &log_context,const std::string &message) = 0;   
+    
+};
+
+class AsyncLogWriter:public LogWriter
+{
+public:
+    AsyncLogWriter();
+    ~AsyncLogWriter();
+
+private:
+    //void write(const LogContext &log_context,const std::string &message) override;
+    void run();
+
+private:
+    std::thread _thread;
+    bool _exit_flag;
 };
 
 

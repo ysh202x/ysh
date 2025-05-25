@@ -2,7 +2,9 @@
 #include <memory>
 #include <sys/time.h>
 #include <stdarg.h>
+#include "util.h"
 #include "logger.h"
+
 
 //使用名称空间
 using namespace std;
@@ -258,5 +260,197 @@ void ConsoleChannel::write(const Logger &logger,const LogContextPtr &ctx)
     format(logger, std::cout, ctx, true, true);
 }
 
+FileChannelBase::FileChannelBase(const std::string &name, const std::string &path, LogLevel level)
+    : LogChannel(name, level), _path(path)
+{
+    //std::cout << "FileChannelBase" << std::endl;
+
 }
 
+FileChannelBase::~FileChannelBase()
+{
+    close();
+}
+
+void FileChannelBase::write(const Logger &logger,const LogContextPtr &ctx)
+{
+    if(_level > ctx->_level)
+    {
+        return;
+    }
+    if(!_fstream.is_open())
+    {
+        if(!open())
+        {
+            return;
+        }
+    }
+
+    format(logger, _fstream, ctx, false);
+}
+
+bool FileChannelBase::setPath(const std::string &path)
+{
+    _path = path;
+    return open();
+}
+
+
+const std::string &FileChannelBase::path() const
+{
+    return _path;   
+}
+
+bool FileChannelBase::open()
+{
+    if(_path)
+    {
+        throw std::runtime_error("path is empty");
+    }
+
+    _fstream.close();
+
+    File::create_path(_path,0);
+
+    _fstream.open(_path, ios::out | ios::app);
+    if(!_fstream.is_open())
+    {
+        std::cerr << "open file error" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+void FileChannelBase::close()
+{
+    if(_fstream.is_open())
+    {
+        _fstream.close();
+    }
+}
+
+/*****************FileChannel******************************** */
+//根据unix 时间戳生产日志文件名
+static string _getLogFilePath(const string &dir,time_t sec,size_t index)
+{
+    auto tm = localtime(&sec);
+    char buf[64] = {0};
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d_%02d.log",
+            1900 + tm->tm_year,
+            1 + tm->tm_mon,
+            tm->tm_mday,
+            index);
+    return dir + buf;
+}
+
+static const char * _get_file_name(const char *file)
+{
+    autp pos = strrchr(file, '/');
+    return pos ? pos + 1 : file;
+}
+//根据日志文件返回时间戳
+static time_t _getLogFileTime(const string &full_path)
+{
+    auto name = _get_file_name(full_path.data());
+    struct tm tm{0};
+    if(sscanf(name, "%04d-%02d-%02d.log",
+            &tm.tm_year,
+            &tm.tm_mon,
+            &tm.tm_mday) != 3)
+    {
+        return 0;
+    }
+    tm.tm_year -= 1900;
+    tm.tm_mon -= 1;
+    return mktime(&tm);
+
+}
+
+static bool is_dir(const std::string &path) {
+    auto dir = opendir(path.data());
+    if (!dir) {
+        return false;
+    }
+    closedir(dir);
+    return true;
+}
+
+static void _scanDir(const std::string &dir,const function <bool (const string &path,bool is_dir)> &cb,
+                        bool enter_subdir = false,bool show_hidden_file = false)
+{
+    string path = dir;
+    if(path.back() != '/')
+    {
+        path += '/';
+    }
+    DIR *dirp ;
+    dirent *pDirent;
+    if((dirp = opendir(path.c_str())) == nullptr)
+    {
+        return;
+    }
+    while((pDirent = readdir(dirp)) != nullptr)
+    {
+        if (!show_hidden_file && pDirent->d_name[0] == '.') {
+            //隐藏的文件  [AUTO-TRANSLATED:3b2eb642]
+            //Hidden file
+            continue;
+        }
+        string strAbsolutePath = path + "/" + pDirent->d_name;
+        bool isDir = is_dir(strAbsolutePath);
+        if (!cb(strAbsolutePath, isDir)) {
+            //不再继续扫描  [AUTO-TRANSLATED:991bdb3f]
+            //Stop scanning
+            break;
+        }
+        if (isDir && enter_subdirectory)
+        {
+            //如果是文件夹并且扫描子文件夹，那么递归扫描  [AUTO-TRANSLATED:36773722]
+            //If it's a folder and scanning subfolders, then recursively scan
+            _scanDir(strAbsolutePath, cb, enter_subdirectory);
+        }
+
+    }
+}
+
+FileChannel::FileChannel(const std::string &name, const std::string &dir, LogLevel level)
+    : FileChannelBase(name, "", level)
+{
+    _dir = dir;
+    if(_dir.back() != '/')
+    {
+        _dir += '/';
+    }
+
+    //获取 dir下 所有的日志文件
+    _scanDir(_dir,[this](const string &path,bool is_dir) -> bool{
+        if(!is_dir && strstr(path.data(), ".log"))
+        {
+            _log_file_map.emplace(path);
+        }
+        return true;
+    });
+
+    //获取今天日志文件的最大index号
+    auto log_name_prefix = getTimeStr("%Y-%m-%d_");
+    for(auto it = _log_file_map.begin(); int != _log_file_map.end(); ++it)
+    {
+        aito name = _get_file_name(it->data());
+        //筛选出今天所有的日志文件
+        if(strstr(name, log_name_prefix.data()))
+        {
+            int index = 0;
+            if(sscanf(name, "%*[^_]%d.log", &index) == 1)
+            {
+                _index = std::max(_index, (size_t)index);
+            }
+        }
+    }
+    std::cout << "log index:" << _index << std::endl;
+}
+
+void FileChannel::write(const Logger &logger,const LogContextPtr &ctx)
+{
+    time_t sec = ctx->_tv.tv_sec;
+    //auto day == getDay
+}
