@@ -2,6 +2,10 @@
 #include <memory>
 #include <sys/time.h>
 #include <stdarg.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <cstring>
+#include <functional>
 #include "util.h"
 #include "logger.h"
 
@@ -303,14 +307,12 @@ const std::string &FileChannelBase::path() const
 
 bool FileChannelBase::open()
 {
-    if(_path)
+    if(_path.empty())
     {
         throw std::runtime_error("path is empty");
     }
 
     _fstream.close();
-
-    File::create_path(_path,0);
 
     _fstream.open(_path, ios::out | ios::app);
     if(!_fstream.is_open())
@@ -329,13 +331,18 @@ void FileChannelBase::close()
     }
 }
 
+size_t FileChannelBase::size()
+{
+    return (_fstream << std::flush).tellp();
+}
+
 /*****************FileChannel******************************** */
 //根据unix 时间戳生产日志文件名
 static string _getLogFilePath(const string &dir,time_t sec,size_t index)
 {
     auto tm = localtime(&sec);
     char buf[64] = {0};
-    snprintf(buf, sizeof(buf), "%04d-%02d-%02d_%02d.log",
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d_%02ld.log",
             1900 + tm->tm_year,
             1 + tm->tm_mon,
             tm->tm_mday,
@@ -345,7 +352,7 @@ static string _getLogFilePath(const string &dir,time_t sec,size_t index)
 
 static const char * _get_file_name(const char *file)
 {
-    autp pos = strrchr(file, '/');
+    auto pos = strrchr(file, '/');
     return pos ? pos + 1 : file;
 }
 //根据日志文件返回时间戳
@@ -403,11 +410,11 @@ static void _scanDir(const std::string &dir,const function <bool (const string &
             //Stop scanning
             break;
         }
-        if (isDir && enter_subdirectory)
+        if (isDir && enter_subdir)
         {
             //如果是文件夹并且扫描子文件夹，那么递归扫描  [AUTO-TRANSLATED:36773722]
             //If it's a folder and scanning subfolders, then recursively scan
-            _scanDir(strAbsolutePath, cb, enter_subdirectory);
+            _scanDir(strAbsolutePath, cb, enter_subdir);
         }
 
     }
@@ -432,15 +439,15 @@ FileChannel::FileChannel(const std::string &name, const std::string &dir, LogLev
     });
 
     //获取今天日志文件的最大index号
-    auto log_name_prefix = getTimeStr("%Y-%m-%d_");
-    for(auto it = _log_file_map.begin(); int != _log_file_map.end(); ++it)
+    auto log_name_prefix = getTimeStr("%Y-%m-%d_", time(nullptr));
+    for(auto it = _log_file_map.begin(); it != _log_file_map.end(); ++it)
     {
-        aito name = _get_file_name(it->data());
+        auto name = _get_file_name(it->data());
         //筛选出今天所有的日志文件
         if(strstr(name, log_name_prefix.data()))
         {
             int index = 0;
-            if(sscanf(name, "%*[^_]%d.log", &index) == 1)
+            if(sscanf(name ,"%*[^_]%d.log", &index) == 1)
             {
                 _index = std::max(_index, (size_t)index);
             }
@@ -452,5 +459,104 @@ FileChannel::FileChannel(const std::string &name, const std::string &dir, LogLev
 void FileChannel::write(const Logger &logger,const LogContextPtr &ctx)
 {
     time_t sec = ctx->_tv.tv_sec;
-    //auto day == getDay
+    //日志所在的天 localtime(&sec);
+    auto tm = getLocalTime(sec);
+    if(tm.tm_year != _last_tm.tm_year ||
+       tm.tm_mon != _last_tm.tm_mon ||
+       tm.tm_mday != _last_tm.tm_mday)
+    {
+        //如果是新的一天，那么重新生成日志文件
+        _index = 0;
+        _last_tm = tm;
+        changeFile(sec);
+    }
+    else
+    {
+        //检查日志文件大小
+        checkSize(sec);
+    }
+    if(_can_write)
+    {
+        FileChannelBase::write(logger, ctx);
+    }
+    
 }
+
+void FileChannel::clean()
+{
+    //删除过期的日志文件
+    auto now = time(nullptr);
+    auto log_name_prefix = getTimeStr("%Y-%m-%d_",now);
+    for(auto it = _log_file_map.begin(); it != _log_file_map.end();)
+    {
+        auto file_time = _getLogFileTime(it->data());
+        if(file_time > 0 && (now - file_time) > _log_max_day * 24 * 3600)
+        {
+            //删除过期的日志文件
+            remove(it->data());
+            it = _log_file_map.erase(it);
+        }
+    }
+
+    //删除日志文件数量超过限制的日志文件
+    while(_log_file_map.size() > _log_max_count)
+    {
+        //删除最早的日志文件
+        auto it = _log_file_map.begin();
+        if(*it == path())
+            break;
+        if(it != _log_file_map.end())
+        {
+            remove(it->data());
+            _log_file_map.erase(it);
+        }
+    }
+}
+
+void FileChannel::checkSize(time_t sec)
+{
+    //1min 检查一次 
+    if(sec - _last_check_time < 60)
+    {
+        return;
+    }
+    if(FileChannelBase::size() > _log_max_size)
+    {
+        //如果日志文件大小超过限制，那么切换到新的日志文件
+        changeFile(sec);
+    }
+
+    _last_check_time = sec;
+}
+
+void FileChannel::changeFile(time_t sec)
+{
+    auto log_file = _getLogFilePath(_dir, sec, _index++);
+    _log_file_map.emplace(log_file);
+    _can_write = setPath(log_file);
+    if(!_can_write)
+    {
+        std::cerr << "change file error: " << log_file << std::endl;
+        return;
+    }
+    
+    clean();
+}
+
+void FileChannel::setMaxDay(size_t max_day) 
+{
+    _log_max_day = max_day > 1 ? max_day : 1;
+}
+
+void FileChannel::setFileMaxSize(size_t max_size) 
+{
+    _log_max_size = max_size > 1 ? max_size : 1;
+}
+
+void FileChannel::setFileMaxCount(size_t max_count) 
+{
+    _log_max_count = max_count > 1 ? max_count : 1;
+}
+
+}
+

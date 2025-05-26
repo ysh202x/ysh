@@ -3,14 +3,19 @@
 
 
 #include <string>
+#include <ctime>
+#include <sys/time.h>
+#include <unistd.h>
+#include <limits.h>
+#include <iostream>
 
 namespace ysh_toolkit
 {
 
 std::string exe_path(bool  is_exe= true);
 std::string exe_dir(bool is_exe= true);
-
-
+struct tm getLocalTime(time_t sec);
+std::string getTimeStr(const char *fmt, time_t time) ;
 
 }
 

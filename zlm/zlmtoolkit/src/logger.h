@@ -6,6 +6,8 @@
 #include <sstream>
 #include <memory>
 #include <map>
+#include <set>
+#include <fstream>
 #include "util.h"
 
 namespace ysh_toolkit{
@@ -164,13 +166,13 @@ protected:
     std::ofstream _fstream;
 };
 
-class FileChannel : public ConsoleChannel
+class FileChannel : public FileChannelBase
 {
 public:
     FileChannel(const std::string &name = "FileChannel",const std::string &dir = exe_dir() + + "log/",LogLevel level = LTrace);
     ~FileChannel() override = default;
 
-    void wirte(const Logger &logger,const LogContextPtr &ctx) override ;
+    void write(const Logger &logger,const LogContextPtr &ctx) override ;
 
     void setMaxDay(size_t max_day);
 
@@ -195,10 +197,11 @@ private:
 
     size_t _index = 0;
     int64_t _last_day = -1;
+    struct tm _last_tm = {0};
     time_t _last_check_time = 0;
-    std:string _dir;
+    std::string _dir;
     std::set<std::string> _log_file_map;
-}
+};
 
 
 class LoggerWrapper{

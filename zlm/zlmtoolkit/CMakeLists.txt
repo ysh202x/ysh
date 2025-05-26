@@ -15,7 +15,8 @@ include_directories(
 )
 
 set(LOG_SRC_LIST
-    ./src/logger.cpp)
+    ./src/logger.cpp
+    ./src/uitl.cpp)
 
 add_library(LOGGER_STATIC_LIB STATIC ${LOG_SRC_LIST})
 
