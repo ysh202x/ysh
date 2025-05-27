@@ -221,6 +221,22 @@ void LoggerWrapper::printLog(Logger &logger,LogLevel level,const char *file,
     va_end(ap);
 }
 
+std::string LogChannel::printTime(const timeval & tv)
+{
+    auto tm = getLocalTime(tv.tv_sec);
+    char buf[64] = {0};
+    snprintf(buf, sizeof(buf), "%d-%02d-%02d %02d:%02d:%02d.%03d",
+            1900 + tm.tm_year,
+            1 + tm.tm_mon,
+            tm.tm_mday,
+            tm.tm_hour,
+            tm.tm_min,
+            tm.tm_sec,
+            (int)(tv.tv_usec / 1000));
+
+    return buf;   
+}
+
 void LogChannel::format(const Logger & logger,std::ostream &ost, const LogContextPtr &ctx, bool enable_color, bool enable_detail)
 {
     #define CLEAR_COLOR "\033[0m"
@@ -238,6 +254,8 @@ static const char *LOG_CONST_TABLE[][3] = {
     {
         ost << LOG_CONST_TABLE[ctx->_level][1];
     }
+
+    ost << printTime(ctx->_tv) << " " << LOG_CONST_TABLE[ctx->_level][2] << " ";
 
     if(enable_detail)
     {
@@ -358,6 +376,7 @@ static const char * _get_file_name(const char *file)
 //根据日志文件返回时间戳
 static time_t _getLogFileTime(const string &full_path)
 {
+    printf("get log file time: %s\n", full_path.data());
     auto name = _get_file_name(full_path.data());
     struct tm tm{0};
     if(sscanf(name, "%04d-%02d-%02d.log",
@@ -487,7 +506,7 @@ void FileChannel::clean()
     //删除过期的日志文件
     auto now = time(nullptr);
     auto log_name_prefix = getTimeStr("%Y-%m-%d_",now);
-    for(auto it = _log_file_map.begin(); it != _log_file_map.end();)
+    for(auto it = _log_file_map.begin(); it != _log_file_map.end();it++)
     {
         auto file_time = _getLogFileTime(it->data());
         if(file_time > 0 && (now - file_time) > _log_max_day * 24 * 3600)

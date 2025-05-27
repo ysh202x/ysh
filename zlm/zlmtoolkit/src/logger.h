@@ -129,6 +129,7 @@ public:
     virtual void write(const Logger &logger,const LogContextPtr &ctx) = 0;
     const std::string &name() const { return _name; }
     void setLevel(LogLevel level) { _level = level; }
+    static std::string printTime(const timeval &tv);
 
 protected:
     virtual void format(const Logger & logger,std::ostream &ost, const LogContextPtr &ctx, bool enable_color = true, bool enable_detail = true);
@@ -192,7 +193,7 @@ private:
     bool _can_write = false;
 
     size_t _log_max_day = 7;
-    size_t _log_max_size = 1024 * 1024 * 10; //10M
+    size_t _log_max_size = 1024 * 512; //10M
     size_t _log_max_count = 10;
 
     size_t _index = 0;

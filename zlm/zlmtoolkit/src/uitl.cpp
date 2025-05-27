@@ -28,17 +28,28 @@ std::string exe_dir(bool isExe)
     return path.substr(0, path.rfind('/') + 1);        
 }
 
+struct tm getLocalTime(time_t sec)
+{
+    struct tm tm = {0};
+    if (sec) {
+        localtime_r(&sec, &tm);
+    } else {
+        time_t now = ::time(nullptr);
+        localtime_r(&now, &tm);
+    }
+    return tm;
+}
 
 std::string getTimeStr(const char *fmt, time_t time) 
 {
     if (!time) {
         time = ::time(nullptr);
     }
-    auto tm = localtime(time);
+    struct tm tm = getLocalTime(time);
     size_t size = strlen(fmt) + 64;
     string ret;
     ret.resize(size);
-    size = std::strftime(&ret[0], size, fmt, tm);
+    size = std::strftime(&ret[0], size, fmt, &tm);
     if (size > 0) {
         ret.resize(size);
     }
