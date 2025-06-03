@@ -83,20 +83,84 @@ void AsyncLogWriter::run()
     }
 }
 
-AsyncLogWriter::AsyncLogWriter() :_exit_flag(false)
+AsyncLogWriter::AsyncLogWriter() : _head(nullptr), _tail(nullptr), _exit_flag(false)
 {
-    std::cout << "AsyncLogWriter" << std::endl;
-    _thread = std::thread([this]() {
-        this->run();
-    });
+    _thread = std::thread(&AsyncLogWriter::run, this);
 }
 
 AsyncLogWriter::~AsyncLogWriter()
 {
     _exit_flag = true;
-    _thread.join();
+    _cv.notify_one();
+    if (_thread.joinable()) {
+        _thread.join();
+    }
+    clearLogs();
 }
 
+void AsyncLogWriter::pushLog(const LogContext& log_context, const std::string& message) {
+    std::unique_lock<std::mutex> lock(_mutex);
+    
+    // 检查队列大小
+    size_t size = 0;
+    LogNode* current = _head;
+    while (current) {
+        size++;
+        current = current->next;
+    }
+    
+    if (size >= MAX_QUEUE_SIZE) {
+        // 队列已满，移除最旧的日志
+        popLog();
+    }
+    
+    // 创建新节点
+    LogNode* new_node = new LogNode(log_context, message);
+    
+    // 添加到链表尾部
+    if (!_tail) {
+        _head = _tail = new_node;
+    } else {
+        _tail->next = new_node;
+        _tail = new_node;
+    }
+    
+    _cv.notify_one();
+}
+
+void AsyncLogWriter::popLog() {
+    if (!_head) return;
+    
+    LogNode* temp = _head;
+    _head = _head->next;
+    if (!_head) {
+        _tail = nullptr;
+    }
+    delete temp;
+}
+
+void AsyncLogWriter::clearLogs() {
+    while (_head) {
+        popLog();
+    }
+}
+
+void AsyncLogWriter::run() {
+    while (!_exit_flag) {
+        std::unique_lock<std::mutex> lock(_mutex);
+        
+        // 等待新日志或退出信号
+        _cv.wait(lock, [this] { return _head != nullptr || _exit_flag; });
+        
+        // 处理所有待写入的日志
+        while (_head) {
+            LogNode* current = _head;
+            // 这里可以添加实际的日志写入逻辑
+            // write(current->log_context, current->message);
+            popLog();
+        }
+    }
+}
 
 INSTANCE_IMP(Logger,"ysh_logger");
 

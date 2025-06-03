@@ -219,7 +219,7 @@ class LogWriter
 public:
     LogWriter() = default;
     virtual ~LogWriter() = default;
-    virtual void write(const LogContext &log_context,const std::string &message) = 0;   
+    virtual void write(const LogContextPtr &ctx, Logger &logger)) = 0;   
     
 };
 
@@ -230,11 +230,16 @@ public:
     ~AsyncLogWriter();
 
 private:
-    //void write(const LogContext &log_context,const std::string &message) override;
-    void run();
+   void run();
+   void flushAll();
+   void write(const LogContextPtr &ctx, Logger &logger) override;
 
 private:
-    std::thread _thread;
+    std::shared_ptr<std::thread> _thread;
+    std::mutex _mutex;
+    //信号量
+    sem_t _sem;
+
     bool _exit_flag;
 };
 
