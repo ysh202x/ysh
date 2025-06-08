@@ -8,6 +8,9 @@
 #include <map>
 #include <set>
 #include <fstream>
+#include <mutex>
+#include <semaphore.h>
+#include "List.h"
 #include "util.h"
 
 namespace ysh_toolkit{
@@ -15,6 +18,8 @@ namespace ysh_toolkit{
 class LogContext;
 class Logger;
 class LogChannel;
+class LogWriter;
+class AsyncLogWriter;
 
 using LogContextPtr = std::shared_ptr<LogContext>;
 
@@ -42,6 +47,7 @@ public:
 
 class Logger:public noncopyable
 {
+    friend class AsyncLogWriter;
 public:
     /*
         日志单例
@@ -60,10 +66,17 @@ public:
 
     /*写日志*/
     void write(const LogContextPtr &log_context);
+
+    void setWriter(const std::shared_ptr<LogWriter> &writer);
+
+private:
+    void writeChannels(const LogContextPtr &ctx);
+    void writeChannels_l(const LogContextPtr &ctx);
     
 private:
     std::string _logger_name;
     std::map<std::string, std::shared_ptr<LogChannel>> _channels;
+    std::shared_ptr<LogWriter> _writer;
 };
 
 
@@ -219,7 +232,7 @@ class LogWriter
 public:
     LogWriter() = default;
     virtual ~LogWriter() = default;
-    virtual void write(const LogContextPtr &ctx, Logger &logger)) = 0;   
+    virtual void write(const LogContextPtr &ctx, Logger &logger) = 0;   
     
 };
 
@@ -237,9 +250,10 @@ private:
 private:
     std::shared_ptr<std::thread> _thread;
     std::mutex _mutex;
+    
     //信号量
     sem_t _sem;
-
+    List<std::pair<LogContextPtr,Logger *>> _pending;
     bool _exit_flag;
 };
 

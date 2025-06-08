@@ -10,11 +10,13 @@ int main()
     Logger::Instance().add(std::make_shared<ConsoleChannel>("console", LDebug));
     Logger::Instance().add(std::make_shared<FileChannel>("FileChannel","./" ,LDebug));
 
-    for(int i = 0; i < 1024 * 100; ++i)
+    Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
+
+    for(int i = 0; i < 3 ; ++i)
     {
         PrintLogD("%s","hello");
         DebugL << 1 << "+" << 2 << '=' << 3;
     }
-
+    sleep(1);
 
 }

@@ -79,87 +79,44 @@ void AsyncLogWriter::run()
     while(!_exit_flag)
     {
         //wait sem
-        
+        sem_wait(&_sem);
+
+        flushAll();
     }
 }
 
-AsyncLogWriter::AsyncLogWriter() : _head(nullptr), _tail(nullptr), _exit_flag(false)
+AsyncLogWriter::AsyncLogWriter() :  _exit_flag(false)
 {
-    _thread = std::thread(&AsyncLogWriter::run, this);
+     sem_init(&_sem, 0, 0);
+    _thread = std::make_shared<thread>([this]() { this->run(); });
 }
 
 AsyncLogWriter::~AsyncLogWriter()
 {
     _exit_flag = true;
-    _cv.notify_one();
-    if (_thread.joinable()) {
-        _thread.join();
-    }
-    clearLogs();
+    sem_post(&_sem);
+    _thread->join();
 }
 
-void AsyncLogWriter::pushLog(const LogContext& log_context, const std::string& message) {
-    std::unique_lock<std::mutex> lock(_mutex);
-    
-    // 检查队列大小
-    size_t size = 0;
-    LogNode* current = _head;
-    while (current) {
-        size++;
-        current = current->next;
-    }
-    
-    if (size >= MAX_QUEUE_SIZE) {
-        // 队列已满，移除最旧的日志
-        popLog();
-    }
-    
-    // 创建新节点
-    LogNode* new_node = new LogNode(log_context, message);
-    
-    // 添加到链表尾部
-    if (!_tail) {
-        _head = _tail = new_node;
-    } else {
-        _tail->next = new_node;
-        _tail = new_node;
-    }
-    
-    _cv.notify_one();
+void AsyncLogWriter::write(const LogContextPtr &ctx, Logger &logger)
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    _pending.push_back(std::make_pair(ctx, &logger));
+    sem_post(&_sem);
 }
 
-void AsyncLogWriter::popLog() {
-    if (!_head) return;
-    
-    LogNode* temp = _head;
-    _head = _head->next;
-    if (!_head) {
-        _tail = nullptr;
+void AsyncLogWriter::flushAll()
+{
+    decltype (_pending) tmp = {0};
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _pending.swap(tmp);
     }
-    delete temp;
-}
 
-void AsyncLogWriter::clearLogs() {
-    while (_head) {
-        popLog();
-    }
-}
+    tmp.for_each([this](const std::pair<LogContextPtr,Logger *> &item) {
+        item.second->writeChannels(item.first);
+    });
 
-void AsyncLogWriter::run() {
-    while (!_exit_flag) {
-        std::unique_lock<std::mutex> lock(_mutex);
-        
-        // 等待新日志或退出信号
-        _cv.wait(lock, [this] { return _head != nullptr || _exit_flag; });
-        
-        // 处理所有待写入的日志
-        while (_head) {
-            LogNode* current = _head;
-            // 这里可以添加实际的日志写入逻辑
-            // write(current->log_context, current->message);
-            popLog();
-        }
-    }
 }
 
 INSTANCE_IMP(Logger,"ysh_logger");
@@ -199,25 +156,44 @@ std::shared_ptr<LogChannel> Logger::get(const std::string &name)
     return nullptr;
 }
 
+void Logger::setWriter(const std::shared_ptr<LogWriter> &writer)
+{
+    _writer = writer;
+}
+
 void Logger::write(const LogContextPtr &ctx)
 {
+    if(_writer)
     {
-        //whitechannel
-        if(_channels.empty())
+        _writer->write(ctx, *this);
+    }
+    else
+    {
+        writeChannels(ctx);
+    }
+}
+
+void Logger::writeChannels_l(const LogContextPtr &ctx)
+{
+    if(_channels.empty())
+    {
+        return;
+    }
+
+    for(auto &it : _channels)
+    {
+        if(it.second)
         {
-            return;
-        }
-        for(auto &it : _channels)
-        {
-            if(it.second)
-            {
-                it.second->write(*this,ctx);
-            }
+
+            it.second->write(*this,ctx);
         }
     }
 }
 
-
+void Logger::writeChannels(const LogContextPtr &ctx)
+{
+    writeChannels_l(ctx);
+}
 
 /*-----------------log_channel------------------- */
 

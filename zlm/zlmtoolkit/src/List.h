@@ -1,9 +1,10 @@
 #ifndef __YSH_LIST_H__
 #define __YSH_LIST_H__
 
+#include <list>
 
 template<typename T>
-class List : std::list<T>
+class List : public std::list<T>
 {
 public:
     /*template<typename... ARG> 是C++中的可变参数模板（Variadic Template）声明。
@@ -41,6 +42,11 @@ public:
         {
             func(item);
         }
+    }
+
+    void swap(List<T> &other)
+    {
+        std::list<T>::swap(other);
     }
 };
 
