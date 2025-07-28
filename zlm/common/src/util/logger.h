@@ -27,23 +27,6 @@ typedef enum{LTrace,LDebug,LInfo,LWarn,LError}LogLevel;
 
 Logger &getLogger();
 
-class noncopyable
-{
-public :
-    noncopyable() = default;
-    ~noncopyable() = default;
-
-public:
-
-    //禁止拷贝赋值函数
-    noncopyable(const noncopyable &) = delete;
-    //禁止移动构造函数
-    noncopyable(noncopyable &&) = delete;
-    //禁止移动赋值函数
-    noncopyable & operator=(noncopyable &&) = delete;
-    //禁止拷贝构造函数
-    noncopyable & operator=(const noncopyable &) = delete;
-};
 
 class Logger:public noncopyable
 {
